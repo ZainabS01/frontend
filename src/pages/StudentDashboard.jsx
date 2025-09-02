@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../api';
+import { FiMenu, FiX, FiHome, FiCheckSquare, FiCalendar, FiUser, FiLogOut } from 'react-icons/fi';
 
 export default function StudentDashboard() {
   const [attendanceMsg, setAttendanceMsg] = useState('');
@@ -16,6 +17,7 @@ export default function StudentDashboard() {
   });
   const [activeTab, setActiveTab] = useState('Home');
   const [profileMsg, setProfileMsg] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -113,11 +115,34 @@ export default function StudentDashboard() {
     navigate('/login');
   };
 
+  const navItems = [
+    { name: 'Home', icon: <FiHome className="mr-2" /> },
+    { name: 'Tasks', icon: <FiCheckSquare className="mr-2" /> },
+    { name: 'Attendance', icon: <FiCalendar className="mr-2" /> },
+    { name: 'Profile', icon: <FiUser className="mr-2" /> },
+  ];
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-black via-gray-900 to-brand-blue p-4 md:p-6">
-      <div className="max-w-6xl mx-auto bg-white/95 backdrop-blur rounded-xl shadow-card">
-        {/* Navbar */}
-        <div className="grid grid-cols-3 items-center px-4 md:px-6 py-3 border-b">
+    <div className="min-h-screen bg-gradient-to-br from-brand-black via-gray-900 to-brand-blue p-2 sm:p-4 md:p-6">
+      <div className="max-w-6xl mx-auto bg-white/95 backdrop-blur rounded-xl shadow-card overflow-hidden">
+        {/* Mobile Header */}
+        <div className="md:hidden flex items-center justify-between p-3 border-b">
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-2 rounded-md text-gray-700 hover:bg-gray-100"
+            >
+              {mobileMenuOpen ? <FiX size={24} /> : <FiMenu size={24} />}
+            </button>
+            <div className="font-semibold text-brand-black">Student Portal</div>
+          </div>
+          <div className="w-9 h-9 rounded-full bg-brand-blue text-white flex items-center justify-center font-bold">
+            {profile?.name ? profile.name.split(' ').map(s=>s[0]).slice(0,2).join('').toUpperCase() : 'ST'}
+          </div>
+        </div>
+
+        {/* Desktop Navbar */}
+        <div className="hidden md:grid grid-cols-3 items-center px-6 py-3 border-b">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-full bg-brand-blue text-white flex items-center justify-center font-bold">
               {profile?.name ? profile.name.split(' ').map(s=>s[0]).slice(0,2).join('').toUpperCase() : 'ST'}
@@ -125,47 +150,83 @@ export default function StudentDashboard() {
             <div className="font-semibold text-brand-black">Student Portal</div>
           </div>
           <div className="flex items-center justify-center gap-1">
-            {['Home','Tasks','Attendance','Profile'].map(tab => (
+            {navItems.map(({name}) => (
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab===tab ? 'bg-brand-blue text-white' : 'text-brand-black hover:bg-gray-100'}`}
+                key={name}
+                onClick={() => {
+                  setActiveTab(name);
+                  setMobileMenuOpen(false);
+                }}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === name ? 'bg-brand-blue text-white' : 'text-brand-black hover:bg-gray-100'
+                }`}
               >
-                {tab}
+                {name}
               </button>
             ))}
           </div>
           <div className="flex items-center justify-end">
-            <button onClick={logout} className="px-3 py-1.5 rounded-md text-sm bg-brand-red text-white hover:bg-red-700">Logout</button>
+            <button 
+              onClick={logout} 
+              className="px-3 py-1.5 rounded-md text-sm bg-brand-red text-white hover:bg-red-700 flex items-center"
+            >
+              <FiLogOut className="mr-1" /> Logout
+            </button>
           </div>
         </div>
 
+        {/* Mobile Menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-b">
+            {navItems.map(({name, icon}) => (
+              <button
+                key={name}
+                onClick={() => {
+                  setActiveTab(name);
+                  setMobileMenuOpen(false);
+                }}
+                className={`w-full text-left px-4 py-3 flex items-center text-sm font-medium ${
+                  activeTab === name ? 'bg-gray-100 text-brand-blue' : 'text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {icon} {name}
+              </button>
+            ))}
+            <button
+              onClick={logout}
+              className="w-full text-left px-4 py-3 flex items-center text-sm font-medium text-gray-700 hover:bg-gray-50 border-t"
+            >
+              <FiLogOut className="mr-2" /> Logout
+            </button>
+          </div>
+        )}
+
         {/* Content */}
-        <div className="p-4 md:p-6">
+        <div className="p-3 sm:p-4 md:p-6">
           {attendanceMsg && <p className="mb-4 text-blue-600 text-sm">{attendanceMsg}</p>}
 
           {activeTab === 'Home' && (
-            <div className="grid gap-4">
-              <div className="bg-white rounded-lg border p-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-brand-blue text-white flex items-center justify-center font-bold">
+            <div className="overflow-x-auto -mx-3 sm:mx-0">
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                  <div className="w-16 h-16 sm:w-12 sm:h-12 rounded-full bg-brand-blue text-white flex items-center justify-center font-bold text-xl sm:text-base">
                     {profile?.name ? profile.name.split(' ').map(s=>s[0]).slice(0,2).join('').toUpperCase() : 'ST'}
                   </div>
-                  <div>
-                    <div className="font-semibold text-brand-black text-lg">{profile?.name || 'Student'}</div>
-                    <div className="text-sm text-gray-600">{profile?.email || ''}</div>
+                  <div className="mt-2 sm:mt-0">
+                    <div className="font-semibold text-brand-black text-lg sm:text-xl">{profile?.name || 'Student'}</div>
+                    <div className="text-sm text-gray-600 break-all">{profile?.email || ''}</div>
                     <div className="text-sm"><span className="text-gray-500">Semester:</span> {profile?.semester ?? '-'}</div>
                     {profile?.phone && (
                       <div className="text-sm text-gray-600">{profile.phone}</div>
                     )}
                   </div>
                 </div>
-              </div>
+              </table>
               <div>
                 <h3 className="text-lg md:text-xl font-semibold mb-3">Recent Tasks</h3>
-                <ul className="grid gap-3 sm:grid-cols-2">
+                <ul className="grid gap-3 grid-cols-1 sm:grid-cols-2">
                   {recentTasks.map(task => (
-                    <li key={task._id} className="border p-3 rounded-lg bg-white shadow-card">
+                    <li key={task._id} className="border p-3 rounded-lg bg-white shadow-card hover:shadow-md transition-shadow">
                       <div className="font-semibold">{task.title}</div>
                       {task.description && <div className="text-sm text-gray-700 mt-1 line-clamp-2">{task.description}</div>}
                       <div className="text-xs text-gray-500 mt-1">{new Date(task.createdAt).toLocaleString()}</div>
@@ -191,7 +252,7 @@ export default function StudentDashboard() {
                     const inWindow = (!start || now >= start) && (!end || now <= end);
                     const alreadyMarked = attendedTaskIds.has(String(task._id));
                     return (
-                      <li key={task._id} className="border p-3 rounded-lg flex flex-col gap-1 bg-white shadow-card">
+                      <li key={task._id} className="border p-3 rounded-lg flex flex-col gap-1 bg-white shadow-card hover:shadow-md transition-shadow">
                         <span className="font-semibold">{task.title}</span>
                         {task.description && <span className="text-sm text-gray-700">{task.description}</span>}
                         {task.link && (
@@ -205,18 +266,26 @@ export default function StudentDashboard() {
                           {start && <div>Start: {start.toLocaleString()}</div>}
                           {end && <div>End: {end.toLocaleString()}</div>}
                         </div>
-                        <div className="mt-2">
-                          <button
-                            disabled={!inWindow || alreadyMarked || !!busyTask[task._id]}
-                            onClick={() => markAttendanceForTask(task._id)}
-                            className={`px-3 py-1.5 rounded-md text-white text-sm transition-colors ${(!inWindow || alreadyMarked) ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand-blue hover:bg-blue-700'}`}
-                          >
-                            {alreadyMarked ? 'Attendance Marked' : busyTask[task._id] ? 'Marking...' : 'Mark Attendance'}
-                          </button>
-                          {!inWindow && (
-                            <span className="ml-2 text-xs text-gray-500">{start && now < start ? 'Not started' : 'Window ended'}</span>
-                          )}
-                        </div>
+                        <button
+                          onClick={() => markAttendanceForTask(task._id)}
+                          disabled={!inWindow || alreadyMarked || busyTask[task._id]}
+                          className={`mt-2 px-3 py-1.5 text-sm rounded-md ${alreadyMarked 
+                            ? 'bg-green-100 text-green-800' 
+                            : inWindow 
+                              ? 'bg-brand-blue text-white hover:bg-blue-700' 
+                              : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
+                        >
+                          {busyTask[task._id] 
+                            ? 'Processing...' 
+                            : alreadyMarked 
+                              ? '✓ Done' 
+                              : inWindow 
+                                ? 'Mark Attendance' 
+                                : 'Not Available'}
+                        </button>
+                        {!inWindow && (
+                          <span className="ml-2 text-xs text-gray-500">{start && now < start ? 'Not started' : 'Window ended'}</span>
+                        )}
                       </li>
                     );
                   })}
