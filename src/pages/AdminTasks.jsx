@@ -12,7 +12,8 @@ export default function AdminTasks() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/task/all', {
+      const { apiFetch } = await import('../api');
+      const res = await apiFetch('/task/all', {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -33,7 +34,8 @@ export default function AdminTasks() {
     e.preventDefault();
     setMessage('');
     try {
-      const res = await fetch('/api/task/create', {
+      const { apiFetch } = await import('../api');
+      const res = await apiFetch('/task/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({

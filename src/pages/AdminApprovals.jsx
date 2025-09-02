@@ -11,7 +11,8 @@ export default function AdminApprovals() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/auth/all', {
+      const { apiFetch } = await import('../api');
+      const res = await apiFetch('/auth/all', {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -31,7 +32,8 @@ export default function AdminApprovals() {
   const saveUser = async (id) => {
     try {
       const user = users.find(u => u._id === id);
-      const res = await fetch(`/api/auth/${id}`, {
+      const { apiFetch } = await import('../api');
+      const res = await apiFetch(`/auth/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -50,7 +52,8 @@ export default function AdminApprovals() {
   const deleteUser = async (id) => {
     if (!confirm('Delete this user?')) return;
     try {
-      const res = await fetch(`/api/auth/${id}`, {
+      const { apiFetch } = await import('../api');
+      const res = await apiFetch(`/auth/${id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`
@@ -69,7 +72,8 @@ export default function AdminApprovals() {
   const approve = async (id) => {
     try {
       setBusy(prev => ({ ...prev, [id]: true }));
-      const res = await fetch(`/api/auth/approve/${id}`, {
+      const { apiFetch } = await import('../api');
+      const res = await apiFetch(`/auth/approve/${id}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -88,7 +92,8 @@ export default function AdminApprovals() {
   const reject = async (id) => {
     try {
       setBusy(prev => ({ ...prev, [id]: true }));
-      const res = await fetch(`/api/auth/${id}`, {
+      const { apiFetch } = await import('../api');
+      const res = await apiFetch(`/auth/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -116,7 +121,8 @@ export default function AdminApprovals() {
   const saveRole = async (id, role) => {
     try {
       setBusy(prev => ({ ...prev, [id]: true }));
-      const res = await fetch(`/api/auth/role/${id}`, {
+      const { apiFetch } = await import('../api');
+      const res = await apiFetch(`/auth/role/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

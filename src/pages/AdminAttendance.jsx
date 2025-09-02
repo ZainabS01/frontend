@@ -12,7 +12,8 @@ export default function AdminAttendance() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/attendance/all', {
+      const { apiFetch } = await import('../api');
+      const res = await apiFetch('/attendance/all', {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();

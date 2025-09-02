@@ -33,7 +33,8 @@ export default function Signup() {
       if (form.password !== form.confirmPassword) {
         throw new Error('Passwords do not match');
       }
-      const response = await fetch('/api/auth/signup', {
+      const { apiFetch } = await import('../api');
+      const response = await apiFetch('/auth/signup', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

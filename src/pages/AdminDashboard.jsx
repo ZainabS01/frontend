@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { apiFetch } from '../api';
 
 export default function AdminDashboard() {
   const [pending, setPending] = useState([]);
@@ -11,19 +12,19 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     // Fetch all users for approval
-    fetch('/api/auth/all', { headers: { Authorization: `Bearer ${token}` } })
+    apiFetch('/auth/all', { headers: { Authorization: `Bearer ${token}` } })
       .then((res) => res.json())
       .then((data) => setPending(data.filter((u) => !u.approved)))
       .catch(() => setPending([]));
     // Fetch all attendance
-    fetch('/api/attendance/all', { headers: { Authorization: `Bearer ${token}` } })
+    apiFetch('/attendance/all', { headers: { Authorization: `Bearer ${token}` } })
       .then((res) => res.json())
       .then(setAttendance)
       .catch(() => setAttendance([]));
   }, [token]);
 
   const approve = async (id) => {
-    await fetch(`/api/auth/approve/${id}`, {
+    await apiFetch(`/auth/approve/${id}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -38,7 +39,7 @@ export default function AdminDashboard() {
     e.preventDefault();
     setMessage('');
     try {
-      const res = await fetch('/api/task/create', {
+      const res = await apiFetch('/task/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(task),

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { apiFetch } from '../api';
 
 export default function StudentDashboard() {
   const [attendanceMsg, setAttendanceMsg] = useState('');
@@ -21,8 +22,8 @@ export default function StudentDashboard() {
       setLoading(true);
       try {
         const [tasksRes, attRes] = await Promise.all([
-          fetch('/api/task/all', { headers: { Authorization: `Bearer ${token}` } }),
-          fetch('/api/attendance/me', { headers: { Authorization: `Bearer ${token}` } }),
+          apiFetch('/task/all', { headers: { Authorization: `Bearer ${token}` } }),
+          apiFetch('/attendance/me', { headers: { Authorization: `Bearer ${token}` } }),
         ]);
         const [tasksData, attData] = await Promise.all([tasksRes.json(), attRes.json()]);
         setTasks(Array.isArray(tasksData) ? tasksData : []);
@@ -39,7 +40,7 @@ export default function StudentDashboard() {
     const fetchMe = async () => {
       if (!token) return;
       try {
-        const res = await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } });
+        const res = await apiFetch('/auth/me', { headers: { Authorization: `Bearer ${token}` } });
         if (!res.ok) return; // ignore if unauthorized
         const data = await res.json();
         if (data && data._id) {
@@ -87,7 +88,7 @@ export default function StudentDashboard() {
     setAttendanceMsg('');
     setBusyTask(prev => ({ ...prev, [taskId]: true }));
     try {
-      const res = await fetch(`/api/attendance/mark-by-task/${taskId}`, {
+      const res = await apiFetch(`/attendance/mark-by-task/${taskId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       });
@@ -97,7 +98,7 @@ export default function StudentDashboard() {
       // optimistic update to show immediately
       setMyAttendance(prev => ([...prev, { task: taskId, createdAt: new Date().toISOString() }]));
       // refresh my attendance set
-      const me = await fetch('/api/attendance/me', { headers: { Authorization: `Bearer ${token}` } });
+      const me = await apiFetch('/attendance/me', { headers: { Authorization: `Bearer ${token}` } });
       const meData = await me.json();
       setMyAttendance(Array.isArray(meData) ? meData : []);
     } catch (e) {
@@ -271,7 +272,8 @@ export default function StudentDashboard() {
                     return;
                   }
                   try {
-                    const res = await fetch('/api/auth/me', {
+                    const { apiFetch } = await import('../api');
+                    const res = await apiFetch('/auth/me', {
                       method: 'PUT',
                       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                       body: JSON.stringify({

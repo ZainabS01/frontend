@@ -31,7 +31,8 @@ export default function Reset() {
     }
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/reset', {
+      const { apiFetch } = await import('../api');
+      const res = await apiFetch('/auth/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, newPassword }),
