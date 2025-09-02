@@ -206,20 +206,11 @@ export default function StudentDashboard() {
           {attendanceMsg && <p className="mb-4 text-blue-600 text-sm">{attendanceMsg}</p>}
 
           {activeTab === 'Home' && (
-            <div className="overflow-x-auto -mx-3 sm:mx-0">
+            <div className="overflow-x-auto mx-3 sm:mx-0">
               <table className="min-w-full divide-y divide-gray-200 text-sm">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                  <div className="w-16 h-16 sm:w-12 sm:h-12 rounded-full bg-brand-blue text-white flex items-center justify-center font-bold text-xl sm:text-base">
-                    {profile?.name ? profile.name.split(' ').map(s=>s[0]).slice(0,2).join('').toUpperCase() : 'ST'}
-                  </div>
-                  <div className="mt-2 sm:mt-0">
-                    <div className="font-semibold text-brand-black text-lg sm:text-xl">{profile?.name || 'Student'}</div>
-                    <div className="text-sm text-gray-600 break-all">{profile?.email || ''}</div>
-                    <div className="text-sm"><span className="text-gray-500">Semester:</span> {profile?.semester ?? '-'}</div>
-                    {profile?.phone && (
-                      <div className="text-sm text-gray-600">{profile.phone}</div>
-                    )}
-                  </div>
+                 
+                
                 </div>
               </table>
               <div>
