@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { getAllAttendance, deleteAttendance as deleteAttendanceRecord } from '../firebaseAttendance';
+import { toast } from 'react-toastify';
 
 export default function AdminAttendance() {
   const [records, setRecords] = useState([]);
@@ -7,21 +9,16 @@ export default function AdminAttendance() {
   const [search, setSearch] = useState('');
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
-  const token = localStorage.getItem('token');
 
   const fetchAttendance = async () => {
     setLoading(true);
     setError('');
     try {
-      const { apiFetch } = await import('../api');
-      const res = await apiFetch('/attendance/all', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to load attendance');
-      setRecords(Array.isArray(data) ? data : []);
+      const attendanceData = await getAllAttendance();
+      setRecords(Array.isArray(attendanceData) ? attendanceData : []);
     } catch (e) {
       setError(e.message);
+      toast.error('Failed to load attendance: ' + e.message);
     } finally {
       setLoading(false);
     }
@@ -33,29 +30,24 @@ export default function AdminAttendance() {
     }
     setDeletingId(attendanceId);
     try {
-      const { apiFetch } = await import('../api');
-      const res = await apiFetch(`/attendance/${attendanceId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to delete attendance');
+      await deleteAttendanceRecord(attendanceId);
+      setRecords(prev => prev.filter(record => record.id !== attendanceId));
       
-      // Update local state
-      setRecords(prev => prev.filter(r => r._id !== attendanceId));
-      
-      // If we're viewing the student's records, update the selected user's records
+      // Update selected user's records if viewing a specific student
       if (selectedUserId) {
         const updatedGroup = grouped.find(g => g.id === selectedUserId);
-        if (updatedGroup && updatedGroup.items.some(item => item._id === attendanceId)) {
-          updatedGroup.items = updatedGroup.items.filter(item => item._id !== attendanceId);
+        if (updatedGroup && updatedGroup.items.some(item => item.id === attendanceId)) {
+          updatedGroup.items = updatedGroup.items.filter(item => item.id !== attendanceId);
           if (updatedGroup.items.length === 0) {
             setSelectedUserId(null);
           }
         }
       }
-    } catch (e) {
-      setError(e.message);
+      
+      toast.success('Attendance record deleted successfully');
+    } catch (error) {
+      console.error('Error deleting attendance:', error);
+      toast.error('Failed to delete attendance record: ' + error.message);
     } finally {
       setDeletingId(null);
     }

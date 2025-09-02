@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
+import { getAllTasks, addTask, deleteTask } from '../firebaseTask';
+import { toast } from 'react-toastify';
 
 export default function AdminTasks() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [form, setForm] = useState({ 
     title: '', 
     description: '', 
@@ -24,48 +25,48 @@ export default function AdminTasks() {
     'UI/UX Design',
     'Other'
   ];
-  const [message, setMessage] = useState('');
-  const token = localStorage.getItem('token');
 
   const fetchTasks = async () => {
     setLoading(true);
-    setError('');
     try {
-      const { apiFetch } = await import('../api');
-      const res = await apiFetch('/task/all', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to load tasks');
-      setTasks(Array.isArray(data) ? data : []);
-    } catch (e) {
-      setError(e.message);
+      const tasksData = await getAllTasks();
+      setTasks(Array.isArray(tasksData) ? tasksData : []);
+    } catch (error) {
+      console.error('Error fetching tasks:', error);
+      toast.error('Failed to load tasks: ' + error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchTasks(); }, []);
+  useEffect(() => { 
+    fetchTasks(); 
+  }, []);
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e) => {
+    setForm({ 
+      ...form, 
+      [e.target.name]: e.target.value 
+    });
+  };
 
-  const createTask = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setMessage('');
     try {
-      const { apiFetch } = await import('../api');
-      const res = await apiFetch('/task/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          ...form,
-          attendanceStart: form.attendanceStart ? new Date(form.attendanceStart).toISOString() : undefined,
-          attendanceEnd: form.attendanceEnd ? new Date(form.attendanceEnd).toISOString() : undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to create task');
-      setMessage('Task created successfully!');
+      const now = new Date();
+      const attendanceEnd = new Date(now.getTime() + 30 * 60000); // 30 minutes from now
+      
+      const taskData = {
+        ...form,
+        attendanceStart: now.toISOString(),
+        attendanceEnd: attendanceEnd.toISOString(),
+        status: 'active',
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString()
+      };
+      
+      await addTask(taskData);
+      toast.success('Task created successfully!');
       setForm({ 
         title: '', 
         description: '', 
@@ -75,143 +76,205 @@ export default function AdminTasks() {
         attendanceEnd: '' 
       });
       fetchTasks();
-    } catch (e) {
-      setMessage(e.message);
+    } catch (error) {
+      console.error('Error creating task:', error);
+      toast.error('Failed to create task: ' + error.message);
     }
   };
 
-  const deleteTask = async (taskId) => {
-    if (!window.confirm('Are you sure you want to delete this task? This will also delete all related attendance records.')) {
+  const handleDelete = async (taskId) => {
+    if (!window.confirm('Are you sure you want to delete this task?')) {
       return;
     }
     try {
-      const { apiFetch } = await import('../api');
-      const res = await apiFetch(`/task/${taskId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to delete task');
-      setMessage('Task deleted successfully');
+      await deleteTask(taskId);
+      toast.success('Task deleted successfully!');
       fetchTasks();
-    } catch (e) {
-      setMessage(e.message);
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      toast.error('Failed to delete task: ' + error.message);
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-4">
       <div>
         <h1 className="text-2xl font-bold mb-4">Create Task</h1>
-        <form onSubmit={createTask} className="grid gap-3 bg-white p-4 rounded shadow max-w-xl">
-          <input name="title" value={form.title} onChange={handleChange} placeholder="Title" className="px-3 py-2 border rounded" required />
-          <input name="description" value={form.description} onChange={handleChange} placeholder="Description" className="px-3 py-2 border rounded" />
-          <input name="link" value={form.link} onChange={handleChange} placeholder="Link (optional)" className="px-3 py-2 border rounded" />
-          
-          <div className="grid gap-3">
-            <label className="text-sm text-gray-700">
-              <span className="block mb-1 font-medium">Course</span>
-              <select 
-                name="courseName" 
-                value={form.courseName} 
-                onChange={handleChange} 
-                className="w-full px-3 py-2 border rounded"
-                required
-              >
-                <option value="">Select a course</option>
-                {courses.map(course => (
-                  <option key={course} value={course}>{course}</option>
-                ))}
-              </select>
-            </label>
+        <form onSubmit={handleSubmit} className="grid gap-3 bg-white p-4 rounded-lg shadow-md max-w-2xl">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+            <input
+              type="text"
+              name="title"
+              value={form.title}
+              onChange={handleChange}
+              placeholder="Enter task title"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
           </div>
-          
-          <div className="grid md:grid-cols-2 gap-3">
-            <label className="text-sm text-gray-700">
-              <span className="block mb-1 font-medium">Attendance Start (optional)</span>
-              <input 
-                type="datetime-local" 
-                name="attendanceStart" 
-                value={form.attendanceStart} 
-                onChange={handleChange} 
-                className="w-full px-3 py-2 border rounded" 
-              />
-            </label>
-            <label className="text-sm text-gray-700">
-              <span className="block mb-1 font-medium">Attendance End (optional)</span>
-              <input 
-                type="datetime-local" 
-                name="attendanceEnd" 
-                value={form.attendanceEnd} 
-                onChange={handleChange} 
-                className="w-full px-3 py-2 border rounded" 
-              />
-            </label>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <textarea
+              name="description"
+              value={form.description}
+              onChange={handleChange}
+              placeholder="Enter task description"
+              rows="3"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            ></textarea>
           </div>
-          <button type="submit" className="bg-green-600 text-white py-2 rounded hover:bg-green-700">Create</button>
-          {message && <p className="text-blue-600">{message}</p>}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Link (Optional)</label>
+            <input
+              type="url"
+              name="link"
+              value={form.link}
+              onChange={handleChange}
+              placeholder="https://example.com"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Course</label>
+            <select
+              name="courseName"
+              value={form.courseName}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            >
+              <option value="">Select a course</option>
+              {courses.map((course) => (
+                <option key={course} value={course}>
+                  {course}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+            <p className="text-sm text-yellow-700">
+              Attendance will be open for 30 minutes after task creation.
+            </p>
+          </div>
+
+          <div className="mt-2">
+            <button
+              type="submit"
+              className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              Create Task
+            </button>
+          </div>
         </form>
       </div>
 
-      <div>
-        <h2 className="text-xl font-semibold mb-2">All Tasks</h2>
-        {loading && <p>Loading...</p>}
-        {error && <p className="text-red-600">{error}</p>}
-        <div className="grid gap-3 md:grid-cols-2">
-          {tasks.map(t => (
-            <div key={t._id} className="bg-white p-4 rounded shadow">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="font-semibold">{t.title}</h3>
-                  {t.courseName && (
-                    <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full mt-1">
-                      {t.courseName}
+      <div className="mt-8">
+        <h2 className="text-xl font-semibold mb-4">All Tasks</h2>
+        {loading ? (
+          <div className="flex justify-center items-center h-32">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
+          </div>
+        ) : tasks.length === 0 ? (
+          <div className="text-center py-8 bg-gray-50 rounded-lg">
+            <p className="text-gray-500">No tasks found. Create your first task above.</p>
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {tasks.map((task) => (
+              <div key={task.id} className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200">
+                <div className="p-4">
+                  <div className="flex justify-between items-start">
+                    <h3 className="text-lg font-semibold text-gray-900">{task.title}</h3>
+                    <button
+                      onClick={() => handleDelete(task.id)}
+                      className="text-red-500 hover:text-red-700"
+                      title="Delete task"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                  
+                  {task.courseName && (
+                    <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full mt-1 mb-2">
+                      {task.courseName}
                     </span>
                   )}
+
+                  {task.description && (
+                    <p className="text-gray-600 text-sm mt-2">{task.description}</p>
+                  )}
+
+                  {task.link && (
+                    <a
+                      href={task.link.startsWith('http') ? task.link : `https://${task.link}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block mt-2 text-blue-600 hover:underline text-sm"
+                    >
+                      View Task Link
+                    </a>
+                  )}
+
+                  <div className="mt-3 pt-3 border-t border-gray-100">
+                    {task.attendanceStart && (
+                      <div className="flex items-center text-sm text-gray-500 mb-1">
+                        <svg
+                          className="h-4 w-4 text-green-500 mr-2"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
+                        </svg>
+                        Starts: {new Date(task.attendanceStart).toLocaleString()}
+                      </div>
+                    )}
+
+                    {task.attendanceEnd && (
+                      <div className="flex items-center text-sm text-gray-500">
+                        <svg
+                          className="h-4 w-4 text-red-500 mr-2"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
+                        </svg>
+                        Ends: {new Date(task.attendanceEnd).toLocaleString()}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <button 
-                  onClick={() => deleteTask(t._id)}
-                  className="text-red-500 hover:text-red-700 ml-2"
-                  title="Delete task"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
               </div>
-              {t.description && <p className="text-sm text-gray-700 mt-2">{t.description}</p>}
-              {t.link && (
-                <a 
-                  className="text-blue-600 text-sm mt-2 inline-block hover:underline" 
-                  href={t.link.startsWith('http') ? t.link : `https://${t.link}`} 
-                  target="_blank" 
-                  rel="noreferrer"
-                >
-                  Open link
-                </a>
-              )}
-              <div className="mt-2 text-xs text-gray-600 space-y-1">
-                {t.attendanceStart && (
-                  <div className="flex items-center">
-                    <svg className="h-3 w-3 mr-1 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    Starts: {new Date(t.attendanceStart).toLocaleString()}
-                  </div>
-                )}
-                {t.attendanceEnd && (
-                  <div className="flex items-center">
-                    <svg className="h-3 w-3 mr-1 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                    </svg>
-                    Ends: {new Date(t.attendanceEnd).toLocaleString()}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-          {!loading && tasks.length === 0 && <p>No tasks yet.</p>}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

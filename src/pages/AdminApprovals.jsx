@@ -1,24 +1,65 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { auth } from '../firebase';
 
 export default function AdminApprovals() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState({}); // { [userId]: boolean }
-  const token = localStorage.getItem('token');
+  const [token, setToken] = useState('');
+  const navigate = useNavigate();
+  
+  // Get fresh token
+  useEffect(() => {
+    const getToken = async () => {
+      try {
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+          throw new Error('No authenticated user');
+        }
+        const idToken = await currentUser.getIdToken(true);
+        setToken(idToken);
+      } catch (error) {
+        console.error('Token error:', error);
+        navigate('/login');
+      }
+    };
+    
+    getToken();
+  }, [navigate]);
 
   const fetchUsers = async () => {
+    if (!token) return;
+    
     setLoading(true);
     setError('');
     try {
       const { apiFetch } = await import('../api');
       const res = await apiFetch('/auth/all', {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
       });
+      
+      if (res.status === 401) {
+        // Token expired or invalid
+        await auth.signOut();
+        localStorage.removeItem('user');
+        navigate('/login');
+        return;
+      }
+      
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to load users');
+      
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to load users');
+      }
+      
       setUsers(Array.isArray(data) ? data : []);
     } catch (e) {
+      console.error('Fetch users error:', e);
       setError(e.message);
     } finally {
       setLoading(false);
@@ -30,8 +71,17 @@ export default function AdminApprovals() {
   };
 
   const saveUser = async (id) => {
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+    
     try {
       const user = users.find(u => u._id === id);
+      if (!user) throw new Error('User not found');
+      
+      setBusy(prev => ({ ...prev, [id]: true }));
+      
       const { apiFetch } = await import('../api');
       const res = await apiFetch(`/auth/${id}`, {
         method: 'PUT',
@@ -39,50 +89,112 @@ export default function AdminApprovals() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ name: user.name, email: user.email, approved: user.approved })
+        body: JSON.stringify({ 
+          name: user.name, 
+          email: user.email, 
+          approved: user.approved 
+        })
       });
+      
+      if (res.status === 401) {
+        await auth.signOut();
+        localStorage.removeItem('user');
+        navigate('/login');
+        return;
+      }
+      
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to update user');
+      
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to update user');
+      }
+      
       setUsers(prev => prev.map(u => u._id === id ? data.user : u));
     } catch (e) {
+      console.error('Save user error:', e);
       alert(e.message);
+    } finally {
+      setBusy(prev => ({ ...prev, [id]: false }));
     }
   };
 
   const deleteUser = async (id) => {
     if (!confirm('Delete this user?')) return;
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+    
     try {
+      setBusy(prev => ({ ...prev, [id]: true }));
+      
       const { apiFetch } = await import('../api');
       const res = await apiFetch(`/auth/${id}`, {
         method: 'DELETE',
         headers: {
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         }
       });
+      
+      if (res.status === 401) {
+        await auth.signOut();
+        localStorage.removeItem('user');
+        navigate('/login');
+        return;
+      }
+      
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.message || 'Failed to delete user');
+      
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to delete user');
+      }
+      
       setUsers(prev => prev.filter(u => u._id !== id));
     } catch (e) {
+      console.error('Delete user error:', e);
       alert(e.message);
+    } finally {
+      setBusy(prev => ({ ...prev, [id]: false }));
     }
   };
 
   useEffect(() => { fetchUsers(); }, []);
 
   const approve = async (id) => {
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+    
     try {
       setBusy(prev => ({ ...prev, [id]: true }));
+      
       const { apiFetch } = await import('../api');
       const res = await apiFetch(`/auth/approve/${id}`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}` 
+        },
       });
+      
+      if (res.status === 401) {
+        await auth.signOut();
+        localStorage.removeItem('user');
+        navigate('/login');
+        return;
+      }
+      
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.message || 'Approval failed');
       }
-      setUsers((prev) => prev.map(u => u._id === id ? { ...u, approved: true } : u));
+      
+      // Update the user's approved status in the local state
+      setUsers(prev => prev.map(u => u._id === id ? { ...u, approved: true } : u));
     } catch (e) {
+      console.error('Approve user error:', e);
       alert(e.message);
     } finally {
       setBusy(prev => ({ ...prev, [id]: false }));
@@ -90,8 +202,18 @@ export default function AdminApprovals() {
   };
 
   const reject = async (id) => {
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+    
+    if (!confirm('Are you sure you want to reject this user?')) {
+      return;
+    }
+    
     try {
       setBusy(prev => ({ ...prev, [id]: true }));
+      
       const { apiFetch } = await import('../api');
       const res = await apiFetch(`/auth/${id}`, {
         method: 'PUT',
@@ -101,10 +223,24 @@ export default function AdminApprovals() {
         },
         body: JSON.stringify({ approved: false })
       });
+      
+      if (res.status === 401) {
+        await auth.signOut();
+        localStorage.removeItem('user');
+        navigate('/login');
+        return;
+      }
+      
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Reject failed');
-      setUsers(prev => prev.map(u => u._id === id ? data.user : u));
+      
+      if (!res.ok) {
+        throw new Error(data.message || 'Rejection failed');
+      }
+      
+      // Remove the rejected user from the list
+      setUsers(prev => prev.filter(u => u._id !== id));
     } catch (e) {
+      console.error('Reject user error:', e);
       alert(e.message);
     } finally {
       setBusy(prev => ({ ...prev, [id]: false }));
@@ -113,9 +249,53 @@ export default function AdminApprovals() {
 
   const pending = users.filter(u => !u.approved);
   const onChangeRole = async (id, newRole) => {
-    // optimistic update
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+    
+    // Store the current role in case we need to revert
+    const currentUser = users.find(u => u._id === id);
+    if (!currentUser) return;
+    
+    // Optimistic update
     setUsers(prev => prev.map(u => u._id === id ? { ...u, role: newRole } : u));
-    await saveRole(id, newRole);
+    
+    try {
+      const { apiFetch } = await import('../api');
+      const res = await apiFetch(`/auth/${id}/role`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ role: newRole })
+      });
+      
+      if (res.status === 401) {
+        await auth.signOut();
+        localStorage.removeItem('user');
+        navigate('/login');
+        return;
+      }
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to update role');
+      }
+      
+      // Update the user data with the server response
+      const updatedUser = await res.json();
+      setUsers(prev => prev.map(u => u._id === id ? { ...u, ...updatedUser } : u));
+      
+    } catch (e) {
+      console.error('Role update error:', e);
+      // Revert optimistic update on error
+      setUsers(prev => prev.map(u => u._id === id ? { ...u, role: currentUser.role } : u));
+      alert(e.message || 'Failed to update user role');
+    } finally {
+      setBusy(prev => ({ ...prev, [id]: false }));
+    }
   };
 
   const saveRole = async (id, role) => {
@@ -140,6 +320,8 @@ export default function AdminApprovals() {
       setBusy(prev => ({ ...prev, [id]: false }));
     }
   };
+
+  useEffect(() => { fetchUsers(); }, []);
 
   return (
     <div className="space-y-4">

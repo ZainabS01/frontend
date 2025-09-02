@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { loginAndGetRole } from '../firebaseAuth';
 
 export default function Login() {
   const [form, setForm] = useState({ email: '', password: '' });
@@ -14,33 +15,25 @@ export default function Login() {
     e.preventDefault();
     setMessage('');
     try {
-      const { apiFetch } = await import('../api');
-      const res = await apiFetch('/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify(form),
-        credentials: 'include'
-      });
-      const contentType = res.headers.get('content-type') || '';
-      let data;
-      if (contentType.includes('application/json')) {
-        data = await res.json();
-      } else {
-        const text = await res.text();
-        throw new Error(text || 'Server returned a non-JSON response');
-      }
-      if (res.ok) {
-        localStorage.setItem('token', data.token);
-        if (data && data.user) {
-          localStorage.setItem('user', JSON.stringify(data.user));
+      const { user, profile } = await loginAndGetRole(form.email, form.password);
+      if (profile) {
+        // Store both the user token and profile
+        const token = await user.getIdToken();
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(profile));
+        
+        // Redirect based on role
+        if (profile.role === 'admin') {
+          navigate('/admin');
+        } else {
+          navigate('/student');
         }
-        if (data.user.role === 'admin') navigate('/admin');
-        else navigate('/student');
       } else {
-        setMessage(data.message || 'Login failed');
+        setMessage('User profile not found.');
       }
     } catch (err) {
-      setMessage(err.message || 'Login failed');
+      console.error('Login error:', err);
+      setMessage(err.message || 'Login failed. Please check your credentials.');
     }
   };
 

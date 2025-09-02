@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { signupWithRole } from '../firebaseAuth';
 
 export default function Signup() {
   const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '', semester: '', phone: '' });
@@ -21,7 +22,6 @@ export default function Signup() {
     e.preventDefault();
     setMessage({ text: '', type: '' });
     setIsLoading(true);
-
     try {
       // Client-side validations
       if (form.phone && !/^03\d{9}$/.test(form.phone)) {
@@ -33,43 +33,23 @@ export default function Signup() {
       if (form.password !== form.confirmPassword) {
         throw new Error('Passwords do not match');
       }
-      const { apiFetch } = await import('../api');
-      const response = await apiFetch('/auth/signup', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          name: form.name,
-          email: form.email,
-          password: form.password,
-          semester: form.semester ? Number(form.semester) : undefined,
-          phone: form.phone || undefined,
-        }),
-        credentials: 'include' // Important for cookies/sessions if using them
+      // Firebase Auth signup and Firestore profile
+      await signupWithRole(form.email, form.password, {
+        name: form.name,
+        semester: form.semester ? Number(form.semester) : undefined,
+        phone: form.phone || undefined,
       });
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || 'Something went wrong');
-      }
-      
-      setMessage({ 
-        text: data.message || 'Signup successful! Redirecting to login...',
-        type: 'success' 
+      setMessage({
+        text: 'Signup successful! Redirecting to login...',
+        type: 'success',
       });
-      
-      // Redirect to login after 2 seconds
       setTimeout(() => {
         navigate('/login');
       }, 2000);
-      
     } catch (error) {
-      setMessage({ 
+      setMessage({
         text: error.message || 'Failed to sign up. Please try again.',
-        type: 'error'
+        type: 'error',
       });
     } finally {
       setIsLoading(false);

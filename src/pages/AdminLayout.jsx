@@ -1,18 +1,83 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
+import { auth, db } from '../firebase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { toast } from 'react-toastify';
 
 export default function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) navigate('/login');
+    const verifyAdmin = async () => {
+      try {
+        const user = auth.currentUser;
+        
+        if (!user) {
+          throw new Error('No authenticated user');
+        }
+        
+        // Force token refresh
+        await user.getIdToken(true);
+        
+        // Get fresh user data from Firestore
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        
+        if (!userDoc.exists()) {
+          throw new Error('User profile not found');
+        }
+        
+        const userData = userDoc.data();
+        
+        if (userData.role !== 'admin') {
+          throw new Error('Insufficient permissions');
+        }
+        
+        // Update local storage with fresh user data
+        localStorage.setItem('user', JSON.stringify({
+          ...userData,
+          uid: user.uid
+        }));
+        
+        setLoading(false);
+      } catch (error) {
+        console.error('Admin verification error:', error);
+        await signOut(auth);
+        localStorage.removeItem('user');
+        navigate('/login');
+        toast.error('Admin access required');
+      }
+    };
+    
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        navigate('/login');
+      } else {
+        verifyAdmin();
+      }
+    });
+    
+    return () => unsubscribe();
   }, [navigate]);
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    navigate('/login');
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-brand-blue"></div>
+      </div>
+    );
+  }
+
+  const logout = async () => {
+    try {
+      await signOut(auth);
+      localStorage.removeItem('user');
+      navigate('/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
   };
 
   const linkClass = ({ isActive }) =>
