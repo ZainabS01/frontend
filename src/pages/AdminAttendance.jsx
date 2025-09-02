@@ -6,6 +6,7 @@ export default function AdminAttendance() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [selectedUserId, setSelectedUserId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
   const token = localStorage.getItem('token');
 
   const fetchAttendance = async () => {
@@ -23,6 +24,40 @@ export default function AdminAttendance() {
       setError(e.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const deleteAttendance = async (attendanceId) => {
+    if (!window.confirm('Are you sure you want to delete this attendance record?')) {
+      return;
+    }
+    setDeletingId(attendanceId);
+    try {
+      const { apiFetch } = await import('../api');
+      const res = await apiFetch(`/attendance/${attendanceId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to delete attendance');
+      
+      // Update local state
+      setRecords(prev => prev.filter(r => r._id !== attendanceId));
+      
+      // If we're viewing the student's records, update the selected user's records
+      if (selectedUserId) {
+        const updatedGroup = grouped.find(g => g.id === selectedUserId);
+        if (updatedGroup && updatedGroup.items.some(item => item._id === attendanceId)) {
+          updatedGroup.items = updatedGroup.items.filter(item => item._id !== attendanceId);
+          if (updatedGroup.items.length === 0) {
+            setSelectedUserId(null);
+          }
+        }
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -99,29 +134,66 @@ export default function AdminAttendance() {
               <div className="text-sm text-gray-600">Select a student to view detailed attendance</div>
             ) : (
               <div className="bg-white rounded-lg border p-4">
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-4">
                   <div>
                     <div className="text-lg font-semibold">{selectedGroup.name || 'Student'}</div>
                     {selectedGroup.email && <div className="text-xs text-gray-600">{selectedGroup.email}</div>}
                   </div>
                   <div className="text-sm"><span className="text-gray-500">Total classes:</span> {selectedGroup.items.length}</div>
                 </div>
-                <ul className="divide-y">
+                
+                <div className="grid gap-3 md:grid-cols-2">
                   {selectedGroup.items
                     .slice()
-                    .sort((a,b)=> new Date(b.createdAt||0) - new Date(a.createdAt||0))
-                    .map((r, idx) => {
+                    .sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0))
+                    .map((r) => {
                       const t = r.task;
                       const title = (typeof t === 'object' && t?.title) ? t.title : (r.taskTitle || 'Task');
                       const ts = r.createdAt ? new Date(r.createdAt).toLocaleString() : '';
+                      const isDeleting = deletingId === r._id;
+                      
                       return (
-                        <li key={r._id || idx} className="py-2">
-                          <div className="text-sm font-medium text-brand-black">{title}</div>
-                          <div className="text-xs text-gray-600">{ts}</div>
-                        </li>
+                        <div key={r._id} className="border rounded-lg p-3 hover:shadow-md transition-shadow relative">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="font-medium text-brand-black">{title}</div>
+                              <div className="text-xs text-gray-600">{ts}</div>
+                            </div>
+                            <button
+                              onClick={() => !isDeleting && deleteAttendance(r._id)}
+                              disabled={isDeleting}
+                              className={`text-red-500 hover:text-red-700 ${isDeleting ? 'opacity-50' : ''}`}
+                              title="Delete attendance record"
+                            >
+                              {isDeleting ? (
+                                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                              ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              )}
+                            </button>
+                          </div>
+                          {r.courseName && (
+                            <div className="mt-2">
+                              <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                                {r.courseName}
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
-                </ul>
+                </div>
+                
+                {selectedGroup.items.length === 0 && (
+                  <div className="text-center py-4 text-gray-500">
+                    No attendance records found for this student.
+                  </div>
+                )}
               </div>
             )}
           </div>
