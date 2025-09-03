@@ -80,9 +80,27 @@ export default function AdminAttendance() {
   // Group records by user with attendance statistics
   const grouped = useMemo(() => {
     const map = new Map();
-    const now = new Date();
-    const today = now ? format(now, 'yyyy-MM-dd') : '';
+    const today = format(new Date(), 'yyyy-MM-dd');
+
+    // Initialize all students with zero counts
+    students.forEach(student => {
+      map.set(student.id, {
+        ...student,
+        presentCount: 0,
+        absentCount: 0,
+        totalClasses: 0,
+        items: [],
+        attendance: {}
+      });
+    });
     
+    // If no records, return students with zero counts
+    if (!records || records.length === 0) {
+      return Array.from(map.values()).sort((a, b) => 
+        (a.name || '').localeCompare(b.name || '')
+      );
+    }
+
     // Helper function to safely convert Firestore Timestamp to Date
     const toDate = (timestamp) => {
       try {
@@ -181,22 +199,15 @@ export default function AdminAttendance() {
           recordId: record.id
         };
         
-        // Update attendance counts
-      if (record.status === 'present') {
-        // Only increment present count if not already counted
-        if (!student.items.some(item => item.id === record.id)) {
-          student.presentCount++;
-          // If this is today's record, remove the default absent count
-          if (date === today) {
-            student.absentCount = Math.max(0, student.absentCount - 1);
-          }
-        }
-      } else {
-        student.absentCount++;
-      }
-      // Only increment total classes if this is a new record
+        // Only process if this is a new record and has valid status
       if (!student.items.some(item => item.id === record.id)) {
-        student.totalClasses++;
+        if (record.status === 'present') {
+          student.presentCount = (student.presentCount || 0) + 1;
+          student.totalClasses = (student.totalClasses || 0) + 1;
+        } else if (record.status === 'absent') {
+          student.absentCount = (student.absentCount || 0) + 1;
+          student.totalClasses = (student.totalClasses || 0) + 1;
+        }
       }
       }
       
