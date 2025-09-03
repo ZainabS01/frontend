@@ -1,24 +1,47 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getAllAttendance, deleteAttendance as deleteAttendanceRecord } from '../firebaseAttendance';
+import { 
+  getAllAttendance, 
+  deleteAttendance as deleteAttendanceRecord,
+  addAttendance,
+  updateAttendance 
+} from '../firebaseAttendance';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { db } from '../firebase';
 import { toast } from 'react-toastify';
+import { format } from 'date-fns';
 
 export default function AdminAttendance() {
   const [records, setRecords] = useState([]);
+  const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [selectedUserId, setSelectedUserId] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [deletingId, setDeletingId] = useState(null);
 
   const fetchAttendance = async () => {
     setLoading(true);
     setError('');
     try {
+      // Fetch all attendance records
       const attendanceData = await getAllAttendance();
       setRecords(Array.isArray(attendanceData) ? attendanceData : []);
+      
+      // Fetch all students
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('role', '==', 'student'));
+      const querySnapshot = await getDocs(q);
+      const studentsList = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setStudents(studentsList);
+      
     } catch (e) {
+      console.error('Error fetching data:', e);
       setError(e.message);
-      toast.error('Failed to load attendance: ' + e.message);
+      toast.error('Failed to load data: ' + e.message);
     } finally {
       setLoading(false);
     }
@@ -52,143 +75,384 @@ export default function AdminAttendance() {
       setDeletingId(null);
     }
   };
-
   useEffect(() => { fetchAttendance(); }, []);
 
-  // Group records by user
+  // Group records by user with attendance statistics
   const grouped = useMemo(() => {
     const map = new Map();
-    for (const r of records) {
-      const u = r.user; // can be string id or populated object
-      const id = typeof u === 'object' && u !== null ? u._id : String(u);
-      if (!id) continue;
-      const name = typeof u === 'object' && u?.name ? u.name : (r.userName || 'Unknown');
-      const email = typeof u === 'object' && u?.email ? u.email : (r.userEmail || '');
-      if (!map.has(id)) map.set(id, { id, name, email, items: [] });
-      map.get(id).items.push(r);
-    }
+    const now = new Date();
+    const today = now ? format(now, 'yyyy-MM-dd') : '';
+    
+    // Helper function to safely convert Firestore Timestamp to Date
+    const toDate = (timestamp) => {
+      try {
+        return timestamp?.toDate ? timestamp.toDate() : new Date(timestamp);
+      } catch (e) {
+        console.warn('Error converting timestamp:', e);
+        return new Date(); // Return current date as fallback
+      }
+    };
+    
+    // First, add all students to ensure they appear in the list
+    students.forEach(student => {
+      // Initialize with default values for today's attendance
+      const defaultAttendance = {
+        status: 'absent',
+        recordId: null
+      };
+      
+      map.set(student.id, {
+        id: student.id,
+        name: student.name || 'Unknown',
+        email: student.email || '',
+        semester: student.semester || 'N/A',
+        items: [],
+        attendance: {
+          [today]: { ...defaultAttendance }
+        },
+        presentCount: 0,
+        absentCount: 1, // Default to absent until marked present
+        totalClasses: 1 // Include today's class in total
+      });
+    });
+
+    // Then, process attendance records
+    records.forEach(record => {
+      // Check if attendance was marked within the 30-minute window
+      let recordDate;
+      try {
+        // Use markedAt if available, otherwise fall back to createdAt or current time
+        const timestamp = record.markedAt || record.createdAt || now;
+        recordDate = toDate(timestamp);
+        
+        // Ensure we have a valid date
+        if (isNaN(recordDate.getTime())) {
+          console.warn('Invalid date in record:', record);
+          return; // Skip this record if date is invalid
+        }
+      } catch (e) {
+        console.warn('Error processing date:', e);
+        return; // Skip this record if there's an error
+      }
+      
+      const thirtyMinutesAgo = new Date(now - 30 * 60 * 1000);
+      let recordDateStr;
+      try {
+        recordDateStr = format(recordDate, 'yyyy-MM-dd');
+      } catch (e) {
+        console.warn('Error formatting date:', e);
+        return; // Skip this record if we can't format the date
+      }
+      
+      // If record is older than 30 minutes and marked as present, change to absent
+      if (record.status === 'present' && recordDate < thirtyMinutesAgo) {
+        record.status = 'absent';
+        // Update the record in the database if it's not already being updated
+        if (!record._updating) {
+          record._updating = true;
+          updateAttendance(record.id, { status: 'absent' })
+            .catch(err => console.error('Error updating attendance status:', err));
+        }
+      }
+      
+      // Get the user ID from the record
+      const userId = record.userId || (record.user && (record.user._id || record.user.id)) || '';
+      if (!userId || !map.has(userId)) {
+        console.warn('User not found in students list:', userId);
+        return;
+      }
+      
+      const student = map.get(userId);
+      // Use the marked date or the formatted date string
+      const date = record.markedAt ? format(toDate(record.markedAt), 'yyyy-MM-dd') : recordDateStr;
+      
+      if (date) {
+        // Initialize attendance for this date if it doesn't exist
+        if (!student.attendance[date]) {
+          student.attendance[date] = {
+            status: 'absent',
+            recordId: null
+          };
+        }
+        
+        // Update the attendance status
+        student.attendance[date] = {
+          status: record.status || 'absent',
+          recordId: record.id
+        };
+        
+        // Update attendance counts
+      if (record.status === 'present') {
+        // Only increment present count if not already counted
+        if (!student.items.some(item => item.id === record.id)) {
+          student.presentCount++;
+          // If this is today's record, remove the default absent count
+          if (date === today) {
+            student.absentCount = Math.max(0, student.absentCount - 1);
+          }
+        }
+      } else {
+        student.absentCount++;
+      }
+      // Only increment total classes if this is a new record
+      if (!student.items.some(item => item.id === record.id)) {
+        student.totalClasses++;
+      }
+      }
+      
+      student.items.push(record);
+    });
+
     // Convert to array and sort by name
-    return Array.from(map.values()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-  }, [records]);
+    return Array.from(map.values()).sort((a, b) => 
+      (a.name || '').localeCompare(b.name || '')
+    );
+  }, [records, students]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return grouped;
-    return grouped.filter(s =>
-      (s.name || '').toLowerCase().includes(q) ||
-      (s.email || '').toLowerCase().includes(q)
+    const query = search.trim().toLowerCase();
+    if (!query) return grouped;
+    
+    return grouped.filter(student =>
+      (student.name || '').toLowerCase().includes(query) ||
+      (student.email || '').toLowerCase().includes(query) ||
+      (student.semester?.toString() || '').includes(query)
     );
   }, [grouped, search]);
 
   const selectedGroup = useMemo(() => filtered.find(s => s.id === selectedUserId) || null, [filtered, selectedUserId]);
 
+  const toggleAttendance = async (studentId, status) => {
+    try {
+      const student = grouped.find(s => s.id === studentId);
+      if (!student) return;
+
+      // Find existing attendance record for this date
+      const existingRecord = student.items.find(item => {
+        const itemDate = item.date || (item.timestamp?.toDate ? item.timestamp.toDate().toISOString().split('T')[0] : null);
+        return itemDate === selectedDate;
+      });
+
+      if (existingRecord) {
+        // Update existing record
+        await updateAttendance(existingRecord.id, { status });
+      } else {
+        // Create new attendance record
+        await createAttendance({
+          user: studentId,
+          date: selectedDate,
+          status,
+          timestamp: new Date(),
+          userName: student.name,
+          userEmail: student.email,
+          semester: student.semester
+        });
+      }
+      
+      await fetchAttendance();
+      toast.success(`Attendance marked as ${status} for ${student.name}`);
+    } catch (error) {
+      console.error('Error updating attendance:', error);
+      toast.error('Failed to update attendance: ' + error.message);
+    }
+  };
+
   return (
     <div className="p-4">
-      <div className="flex items-center justify-between gap-2 mb-4">
-        <h1 className="text-2xl font-bold">Attendance</h1>
-        <button onClick={fetchAttendance} className="px-3 py-1.5 rounded bg-brand-blue text-white hover:bg-blue-700">Refresh</button>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <h1 className="text-2xl font-bold">Student Attendance</h1>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex items-center gap-2">
+            <label htmlFor="date" className="text-sm font-medium text-gray-700">Date:</label>
+            <input
+              type="date"
+              id="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="border rounded px-2 py-1 text-sm"
+            />
+          </div>
+          <button 
+            onClick={fetchAttendance} 
+            className="px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 text-sm"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
       {loading && <p>Loading...</p>}
       {error && <p className="text-red-600">{error}</p>}
       {!loading && (
-        <div className="grid md:grid-cols-3 gap-4">
-          {/* Left: student cards */}
-          <div className="md:col-span-1">
-            <div className="mb-3">
-              <input
-                placeholder="Search student by name or email"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full border rounded px-3 py-2"
-              />
-            </div>
-            <div className="grid gap-3">
-              {filtered.map(s => (
-                <button
-                  key={s.id}
-                  onClick={() => setSelectedUserId(s.id)}
-                  className={`text-left border rounded-lg p-3 bg-white shadow-card hover:shadow-md transition ${selectedUserId===s.id ? 'ring-2 ring-brand-blue' : ''}`}
-                >
-                  <div className="font-semibold text-brand-black">{s.name || 'Unknown Student'}</div>
-                  {s.email && <div className="text-xs text-gray-600">{s.email}</div>}
-                  <div className="text-xs mt-1"><span className="text-gray-500">Classes attended:</span> {s.items.length}</div>
-                </button>
-              ))}
-              {filtered.length === 0 && (
-                <div className="text-sm text-gray-500">No students found</div>
-              )}
+        <div className="grid gap-6">
+          {/* Search and Filter */}
+          <div className="bg-white p-4 rounded-lg shadow">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1">
+                <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
+                  Search Students
+                </label>
+                <input
+                  type="text"
+                  id="search"
+                  placeholder="Search by name, email, or semester..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
             </div>
           </div>
 
-          {/* Right: selected student's attendance detail */}
-          <div className="md:col-span-2">
-            {!selectedGroup ? (
-              <div className="text-sm text-gray-600">Select a student to view detailed attendance</div>
-            ) : (
-              <div className="bg-white rounded-lg border p-4">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <div className="text-lg font-semibold">{selectedGroup.name || 'Student'}</div>
-                    {selectedGroup.email && <div className="text-xs text-gray-600">{selectedGroup.email}</div>}
-                  </div>
-                  <div className="text-sm"><span className="text-gray-500">Total classes:</span> {selectedGroup.items.length}</div>
-                </div>
-                
-                <div className="grid gap-3 md:grid-cols-2">
-                  {selectedGroup.items
-                    .slice()
-                    .sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0))
-                    .map((r) => {
-                      const t = r.task;
-                      const title = (typeof t === 'object' && t?.title) ? t.title : (r.taskTitle || 'Task');
-                      const ts = r.createdAt ? new Date(r.createdAt).toLocaleString() : '';
-                      const isDeleting = deletingId === r._id;
-                      
-                      return (
-                        <div key={r._id} className="border rounded-lg p-3 hover:shadow-md transition-shadow relative">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <div className="font-medium text-brand-black">{title}</div>
-                              <div className="text-xs text-gray-600">{ts}</div>
-                            </div>
+        {/* Attendance Table */}
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Student Name
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Semester
+                  </th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Present
+                  </th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Absent
+                  </th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Total Classes
+                  </th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Today's Status
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filtered.length > 0 ? (
+                  filtered.map(student => {
+                    const attendance = student.attendance[selectedDate] || { status: 'absent' };
+                    const isPresent = attendance.status === 'present';
+                    
+                    return (
+                      <tr 
+                        key={student.id} 
+                        className={`hover:bg-gray-50 ${selectedUserId === student.id ? 'bg-blue-50' : ''}`}
+                        onClick={() => setSelectedUserId(student.id === selectedUserId ? null : student.id)}
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="font-medium text-gray-900">{student.name}</div>
+                          <div className="text-sm text-gray-500">{student.email}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {student.semester}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                            {student.presentCount || 0}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                            {student.absentCount || 0}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
+                          {student.totalClasses || 0}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            isPresent ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          }`}>
+                            {isPresent ? 'Present' : 'Absent'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex justify-end space-x-2">
                             <button
-                              onClick={() => !isDeleting && deleteAttendance(r._id)}
-                              disabled={isDeleting}
-                              className={`text-red-500 hover:text-red-700 ${isDeleting ? 'opacity-50' : ''}`}
-                              title="Delete attendance record"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleAttendance(student.id, 'present');
+                              }}
+                              className={`px-2 py-1 rounded text-xs ${
+                                isPresent 
+                                  ? 'bg-green-100 text-green-700 border border-green-300' 
+                                  : 'bg-white text-green-700 border border-green-300 hover:bg-green-50'
+                              }`}
+                              title="Mark Present"
                             >
-                              {isDeleting ? (
-                                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                              ) : (
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              )}
+                              ✓
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleAttendance(student.id, 'absent');
+                              }}
+                              className={`px-2 py-1 rounded text-xs ${
+                                !isPresent 
+                                  ? 'bg-red-100 text-red-700 border border-red-300' 
+                                  : 'bg-white text-red-700 border border-red-300 hover:bg-red-50'
+                              }`}
+                              title="Mark Absent"
+                            >
+                              ✕
                             </button>
                           </div>
-                          {r.courseName && (
-                            <div className="mt-2">
-                              <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                                {r.courseName}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                </div>
-                
-                {selectedGroup.items.length === 0 && (
-                  <div className="text-center py-4 text-gray-500">
-                    No attendance records found for this student.
-                  </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan="4" className="px-6 py-4 text-center text-sm text-gray-500">
+                      {search ? 'No matching students found' : 'No students available'}
+                    </td>
+                  </tr>
                 )}
-              </div>
-            )}
+              </tbody>
+            </table>
           </div>
+        </div>
+
+        {/* Student Attendance Summary */}
+        {selectedUserId && (
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="p-4 border-b bg-gray-50">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Attendance Summary
+              </h2>
+              <p className="text-sm text-gray-600">
+                Showing attendance for {selectedGroup?.name || 'selected student'}
+              </p>
+            </div>
+            <div className="p-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <p className="text-sm font-medium text-green-800">Present</p>
+                  <p className="text-2xl font-bold text-green-700">
+                    {selectedGroup?.items?.filter(item => item.status === 'present').length || 0}
+                  </p>
+                </div>
+                <div className="bg-red-50 p-4 rounded-lg">
+                  <p className="text-sm font-medium text-red-800">Absent</p>
+                  <p className="text-2xl font-bold text-red-700">
+                    {selectedGroup?.items?.filter(item => item.status === 'absent').length || 0}
+                  </p>
+                </div>
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <p className="text-sm font-medium text-blue-800">Total Classes</p>
+                  <p className="text-2xl font-bold text-blue-700">
+                    {selectedGroup?.items?.length || 0}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         </div>
       )}
     </div>

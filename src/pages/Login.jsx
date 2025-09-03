@@ -26,7 +26,7 @@ export default function Login() {
         if (profile.role === 'admin') {
           navigate('/admin');
         } else {
-          navigate('/student');
+          navigate('/dashboard');
         }
       } else {
         setMessage('User profile not found.');

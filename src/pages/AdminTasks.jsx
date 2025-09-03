@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
 import { getAllTasks, addTask, deleteTask } from '../firebaseTask';
 import { toast } from 'react-toastify';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../firebase';
+import { format } from 'date-fns';
 
 export default function AdminTasks() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [attendanceStats, setAttendanceStats] = useState({});
   const [form, setForm] = useState({ 
     title: '', 
     description: '', 
@@ -26,11 +30,51 @@ export default function AdminTasks() {
     'Other'
   ];
 
+  const fetchAttendanceStats = async (taskId) => {
+    try {
+      const attendanceRef = collection(db, 'attendance');
+      const q = query(attendanceRef, where('taskId', '==', taskId));
+      const querySnapshot = await getDocs(q);
+      
+      let presentCount = 0;
+      let absentCount = 0;
+      let attendanceDates = [];
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.status === 'present') {
+          presentCount++;
+        } else if (data.status === 'absent') {
+          absentCount++;
+        }
+        if (data.date) {
+          attendanceDates.push(data.date);
+        }
+      });
+      
+      return {
+        present: presentCount,
+        absent: absentCount,
+        total: presentCount + absentCount,
+        dates: [...new Set(attendanceDates)]
+      };
+    } catch (error) {
+      console.error('Error fetching attendance stats:', error);
+      return { present: 0, absent: 0, total: 0, dates: [] };
+    }
+  };
+
   const fetchTasks = async () => {
     setLoading(true);
     try {
       const tasksData = await getAllTasks();
-      setTasks(Array.isArray(tasksData) ? tasksData : []);
+      const tasksWithStats = await Promise.all(
+        tasksData.map(async (task) => {
+          const stats = await fetchAttendanceStats(task.id);
+          return { ...task, stats };
+        })
+      );
+      setTasks(Array.isArray(tasksWithStats) ? tasksWithStats : []);
     } catch (error) {
       console.error('Error fetching tasks:', error);
       toast.error('Failed to load tasks: ' + error.message);
@@ -232,7 +276,18 @@ export default function AdminTasks() {
                   )}
 
                   <div className="mt-3 pt-3 border-t border-gray-100">
-                    {task.attendanceStart && (
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <div className="bg-green-50 p-2 rounded text-center">
+                        <div className="text-green-800 font-medium">{task.stats?.present || 0}</div>
+                        <div className="text-xs text-green-600">Present</div>
+                      </div>
+                      <div className="bg-red-50 p-2 rounded text-center">
+                        <div className="text-red-800 font-medium">{task.stats?.absent || 0}</div>
+                        <div className="text-xs text-red-600">Absent</div>
+                      </div>
+                    </div>
+                    
+                    <div className="mt-2">
                       <div className="flex items-center text-sm text-gray-500 mb-1">
                         <svg
                           className="h-4 w-4 text-green-500 mr-2"
@@ -247,12 +302,10 @@ export default function AdminTasks() {
                             d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                           />
                         </svg>
-                        Starts: {new Date(task.attendanceStart).toLocaleString()}
+                        {format(new Date(task.attendanceStart), 'MMM d, yyyy hh:mm a')}
                       </div>
-                    )}
 
-                    {task.attendanceEnd && (
-                      <div className="flex items-center text-sm text-gray-500">
+                      <div className="flex items-center text-sm text-gray-500 mb-2">
                         <svg
                           className="h-4 w-4 text-red-500 mr-2"
                           fill="none"
@@ -266,7 +319,21 @@ export default function AdminTasks() {
                             d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                           />
                         </svg>
-                        Ends: {new Date(task.attendanceEnd).toLocaleString()}
+                        {format(new Date(task.attendanceEnd), 'MMM d, yyyy hh:mm a')}
+                      </div>
+                    </div>
+                    
+                    {task.stats?.dates && task.stats.dates.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-xs text-gray-500 mb-1">Attendance Dates:</p>
+                        <div className="text-xs text-gray-600 space-y-1">
+                          {task.stats.dates.map((date, idx) => (
+                            <div key={idx} className="flex items-center">
+                              <span className="w-1.5 h-1.5 bg-blue-500 rounded-full mr-1.5"></span>
+                              {format(new Date(date), 'MMM d, yyyy')}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
