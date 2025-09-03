@@ -494,7 +494,7 @@ export default function StudentDashboard() {
                           {end && <div>End: {formatDate(task.attendanceEnd)}</div>}
                         </div>
                         <button
-                          onClick={() => markAttendanceForTask(task._id)}
+                          onClick={() => markAttendanceForTask(task)}
                           disabled={!inWindow || alreadyMarked || busyTask[task._id]}
                           className={`mt-2 px-3 py-1.5 text-sm rounded-md ${alreadyMarked 
                             ? 'bg-green-100 text-green-800' 
