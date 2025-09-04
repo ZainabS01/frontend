@@ -1,11 +1,32 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { loginAndGetRole } from '../firebaseAuth';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
 
 export default function Login() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [message, setMessage] = useState('');
   const navigate = useNavigate();
+
+  // ✅ Auto-redirect if already logged in
+  useEffect(() => {
+    const auth = getAuth();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        const storedProfile = localStorage.getItem('user');
+        if (storedProfile) {
+          const profile = JSON.parse(storedProfile);
+          if (profile.role === 'admin') {
+            navigate('/admin');
+          } else {
+            navigate('/dashboard');
+          }
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [navigate]);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -17,12 +38,10 @@ export default function Login() {
     try {
       const { user, profile } = await loginAndGetRole(form.email, form.password);
       if (profile) {
-        // Store both the user token and profile
         const token = await user.getIdToken();
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(profile));
-        
-        // Redirect based on role
+
         if (profile.role === 'admin') {
           navigate('/admin');
         } else {
@@ -45,7 +64,7 @@ export default function Login() {
         <input name="password" id="login-password" autoComplete="current-password" type="password" placeholder="Password" value={form.password} onChange={handleChange} required className="mb-2 w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-brand-blue/60" />
         <div className="mb-4 text-right">
           <Link to="/forgot" className="text-sm text-brand-blue hover:underline">Forgot password?</Link>
-         </div>
+        </div>
         <button type="submit" className="w-full bg-brand-blue text-white py-2.5 rounded-md hover:bg-blue-700 transition-colors">Login</button>
         {message && <p className="mt-4 text-center text-sm text-gray-700">{message}</p>}
         <p className="mt-4 text-center text-sm">Don't have an account? <Link to="/signup" className="text-brand-blue hover:underline font-medium">Sign up</Link></p>
