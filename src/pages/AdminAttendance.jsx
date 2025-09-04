@@ -19,6 +19,7 @@ export default function AdminAttendance() {
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [deletingId, setDeletingId] = useState(null);
+  const now = new Date();
 
   const fetchAttendance = async () => {
     setLoading(true);
