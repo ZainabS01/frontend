@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from 'react';
 import { FiCalendar, FiCheckCircle, FiClock, FiExternalLink } from 'react-icons/fi';
 
 // Timer component to show countdown for attendance
