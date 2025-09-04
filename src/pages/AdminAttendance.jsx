@@ -88,7 +88,7 @@ export default function AdminAttendance() {
       map.set(student.id, {
         ...student,
         presentCount: 0,
-        absentCount: 0,
+     
         totalClasses: 0,
         items: [],
         attendance: {}
@@ -116,7 +116,7 @@ export default function AdminAttendance() {
     students.forEach(student => {
       // Initialize with default values for today's attendance
       const defaultAttendance = {
-        status: 'absent',
+        status: 'present',
         recordId: null
       };
       
@@ -130,8 +130,7 @@ export default function AdminAttendance() {
           [today]: { ...defaultAttendance }
         },
         presentCount: 0,
-        absentCount: 1, // Default to absent until marked present
-        totalClasses: 1 // Include today's class in total
+        totalClasses: 0
       });
     });
 
@@ -163,16 +162,7 @@ export default function AdminAttendance() {
         return; // Skip this record if we can't format the date
       }
       
-      // If record is older than 30 minutes and marked as present, change to absent
-      if (record.status === 'present' && recordDate < thirtyMinutesAgo) {
-        record.status = 'absent';
-        // Update the record in the database if it's not already being updated
-        if (!record._updating) {
-          record._updating = true;
-          updateAttendance(record.id, { status: 'absent' })
-            .catch(err => console.error('Error updating attendance status:', err));
-        }
-      }
+      // No need to change status for older records
       
       // Get the user ID from the record
       const userId = record.userId || (record.user && (record.user._id || record.user.id)) || '';
@@ -186,30 +176,34 @@ export default function AdminAttendance() {
       const date = record.markedAt ? format(toDate(record.markedAt), 'yyyy-MM-dd') : recordDateStr;
       
       if (date) {
-        // Initialize attendance for this date if it doesn't exist
-        if (!student.attendance[date]) {
+        // Initialize or update attendance for this date
+        const wasPresent = student.attendance[date]?.status === 'present';
+        const isPresent = record.status === 'present';
+        
+        // Only update if this is a new record or status has changed
+        if (!student.items.some(item => item.id === record.id)) {
+          // If this is a new record
           student.attendance[date] = {
-            status: 'absent',
-            recordId: null
+            status: isPresent ? 'present' : 'absent',
+            recordId: record.id
           };
+          
+          // Update counts
+          if (isPresent) {
+            student.presentCount = (student.presentCount || 0) + 1;
+          }
+          student.totalClasses = Object.keys(student.attendance).length;
+        } else if (wasPresent !== isPresent) {
+          // If status changed for existing record
+          student.attendance[date].status = isPresent ? 'present' : 'absent';
+          
+          // Update present count
+          if (isPresent && !wasPresent) {
+            student.presentCount = (student.presentCount || 0) + 1;
+          } else if (!isPresent && wasPresent) {
+            student.presentCount = Math.max(0, (student.presentCount || 1) - 1);
+          }
         }
-        
-        // Update the attendance status
-        student.attendance[date] = {
-          status: record.status || 'absent',
-          recordId: record.id
-        };
-        
-        // Only process if this is a new record and has valid status
-      if (!student.items.some(item => item.id === record.id)) {
-        if (record.status === 'present') {
-          student.presentCount = (student.presentCount || 0) + 1;
-          student.totalClasses = (student.totalClasses || 0) + 1;
-        } else if (record.status === 'absent') {
-          student.absentCount = (student.absentCount || 0) + 1;
-          student.totalClasses = (student.totalClasses || 0) + 1;
-        }
-      }
       }
       
       student.items.push(record);
@@ -234,30 +228,22 @@ export default function AdminAttendance() {
 
   const selectedGroup = useMemo(() => filtered.find(s => s.id === selectedUserId) || null, [filtered, selectedUserId]);
 
-  const toggleAttendance = async (studentId, status) => {
+  const toggleAttendance = async (studentId) => {
     try {
-      const student = grouped.find(s => s.id === studentId);
+      const student = students.find(s => s.id === studentId);
       if (!student) return;
 
-      // Find existing attendance record for this date
-      const existingRecord = student.items.find(item => {
-        const itemDate = item.date || (item.timestamp?.toDate ? item.timestamp.toDate().toISOString().split('T')[0] : null);
-        return itemDate === selectedDate;
-      });
-
-      if (existingRecord) {
-        // Update existing record
-        await updateAttendance(existingRecord.id, { status });
+      const attendanceRecord = student.attendance[selectedDate];
+      const newStatus = attendanceRecord?.status === 'present' ? 'absent' : 'present';
+      
+      // If record exists, update it, otherwise create a new one
+      if (attendanceRecord?.recordId) {
+        await updateAttendance(attendanceRecord.recordId, { status: newStatus });
       } else {
-        // Create new attendance record
-        await createAttendance({
-          user: studentId,
+        await addAttendance({
+          studentId,
           date: selectedDate,
-          status,
-          timestamp: new Date(),
-          userName: student.name,
-          userEmail: student.email,
-          semester: student.semester
+          status: newStatus
         });
       }
       
@@ -331,9 +317,6 @@ export default function AdminAttendance() {
                     Present
                   </th>
                   <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Absent
-                  </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Total Classes
                   </th>
                   <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -347,8 +330,8 @@ export default function AdminAttendance() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {filtered.length > 0 ? (
                   filtered.map(student => {
-                    const attendance = student.attendance[selectedDate] || { status: 'absent' };
-                    const isPresent = attendance.status === 'present';
+                    const attendance = student.attendance[selectedDate] || { status: 'present' };
+                    const isPresent = true; // Always show as present by default
                     
                     return (
                       <tr 
@@ -368,19 +351,12 @@ export default function AdminAttendance() {
                             {student.presentCount || 0}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
-                            {student.absentCount || 0}
-                          </span>
-                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
                           {student.totalClasses || 0}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            isPresent ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                          }`}>
-                            {isPresent ? 'Present' : 'Absent'}
+                          <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                            Present
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -388,30 +364,16 @@ export default function AdminAttendance() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                toggleAttendance(student.id, 'present');
+                                toggleAttendance(student.id);
                               }}
-                              className={`px-2 py-1 rounded text-xs ${
+                              className={`px-3 py-1 rounded text-xs ${
                                 isPresent 
-                                  ? 'bg-green-100 text-green-700 border border-green-300' 
-                                  : 'bg-white text-green-700 border border-green-300 hover:bg-green-50'
+                                  ? 'bg-green-100 text-green-700 border border-green-300 hover:bg-green-200' 
+                                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
                               }`}
-                              title="Mark Present"
+                              title="Toggle Attendance"
                             >
-                              ✓
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleAttendance(student.id, 'absent');
-                              }}
-                              className={`px-2 py-1 rounded text-xs ${
-                                !isPresent 
-                                  ? 'bg-red-100 text-red-700 border border-red-300' 
-                                  : 'bg-white text-red-700 border border-red-300 hover:bg-red-50'
-                              }`}
-                              title="Mark Absent"
-                            >
-                              ✕
+                              {isPresent ? '✓ Present' : 'Mark Present'}
                             </button>
                           </div>
                         </td>
@@ -442,17 +404,11 @@ export default function AdminAttendance() {
               </p>
             </div>
             <div className="p-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-green-50 p-4 rounded-lg">
                   <p className="text-sm font-medium text-green-800">Present</p>
                   <p className="text-2xl font-bold text-green-700">
                     {selectedGroup?.items?.filter(item => item.status === 'present').length || 0}
-                  </p>
-                </div>
-                <div className="bg-red-50 p-4 rounded-lg">
-                  <p className="text-sm font-medium text-red-800">Absent</p>
-                  <p className="text-2xl font-bold text-red-700">
-                    {selectedGroup?.items?.filter(item => item.status === 'absent').length || 0}
                   </p>
                 </div>
                 <div className="bg-blue-50 p-4 rounded-lg">
