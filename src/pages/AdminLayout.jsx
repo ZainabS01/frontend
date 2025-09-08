@@ -4,7 +4,7 @@ import { auth, db } from '../firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { toast } from 'react-toastify';
-
+import logo from '../assets/logo.jpg'
 export default function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -101,9 +101,11 @@ export default function AdminLayout() {
            ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:static`
         }
       >
-        <div className="px-5 py-4 border-b">
+        <div className="px-5 py-4 border-b flex items-center gap-3">
+          <img src={logo} className='w-[50px] h-[50px] rounded-full' alt="" />
+          <div className="flex flex-col">
           <h2 className="text-lg font-extrabold tracking-tight text-brand-black">Admin Panel</h2>
-          <p className="text-xs text-gray-500">Manage users, attendance, and tasks</p>
+        </div>
         </div>
         <nav className="p-3 space-y-1 flex-1">
           <NavLink to="/admin/approvals" className={linkClass}>

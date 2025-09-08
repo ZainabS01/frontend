@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { loginAndGetRole } from '../firebaseAuth';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import logo from '../assets/logo.jpg';
 
 export default function Login() {
   const [form, setForm] = useState({ email: '', password: '' });
@@ -57,18 +58,81 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-black via-gray-900 to-brand-blue px-4">
-      <form onSubmit={handleSubmit} autoComplete="on" className="bg-white/95 backdrop-blur rounded-xl shadow-card w-full max-w-md p-6 md:p-8">
-        <h2 className="text-2xl font-extrabold mb-6 text-center text-brand-black tracking-tight">Welcome to GGCP CS Department</h2>
-        <input name="email" id="login-email" autoComplete="username" type="email" placeholder="Email" value={form.email} onChange={handleChange} required className="mb-4 w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-brand-blue/60" />
-        <input name="password" id="login-password" autoComplete="current-password" type="password" placeholder="Password" value={form.password} onChange={handleChange} required className="mb-2 w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-brand-blue/60" />
-        <div className="mb-4 text-right">
-          <Link to="/forgot" className="text-sm text-brand-blue hover:underline">Forgot password?</Link>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-blue-100 p-4">
+      <div className="w-full max-w-md">
+        {/* Logo and Title */}
+        <div className="text-center mb-8">
+          <div className="flex justify-center mb-4">
+            <img 
+              src={logo} 
+              alt="GGCP Logo" 
+              className="h-20 w-20 rounded-full border-4 border-blue-100 shadow-md"
+            />
+          </div>
+          <h1 className="text-3xl font-bold text-gray-800 mb-1">GGCP CS Department</h1>
+          <p className="text-gray-600">Student Portal</p>
         </div>
-        <button type="submit" className="w-full bg-brand-blue text-white py-2.5 rounded-md hover:bg-blue-700 transition-colors">Login</button>
-        {message && <p className="mt-4 text-center text-sm text-gray-700">{message}</p>}
-        <p className="mt-4 text-center text-sm">Don't have an account? <Link to="/signup" className="text-brand-blue hover:underline font-medium">Sign up</Link></p>
-      </form>
+        
+        {/* Login Form */}
+        <form onSubmit={handleSubmit} autoComplete="on" className="bg-white rounded-xl shadow-lg p-6 md:p-8">
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input 
+                name="email" 
+                id="login-email" 
+                autoComplete="username" 
+                type="email" 
+                placeholder="Enter your email" 
+                value={form.email} 
+                onChange={handleChange} 
+                required 
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+              />
+            </div>
+            
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label htmlFor="login-password" className="block text-sm font-medium text-gray-700">Password</label>
+                <Link to="/forgot" className="text-sm text-blue-600 hover:underline">Forgot password?</Link>
+              </div>
+              <input 
+                name="password" 
+                id="login-password" 
+                autoComplete="current-password" 
+                type="password" 
+                placeholder="Enter your password" 
+                value={form.password} 
+                onChange={handleChange} 
+                required 
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+              />
+            </div>
+
+            <button 
+              type="submit" 
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors shadow-md hover:shadow-lg"
+            >
+              Sign In
+            </button>
+
+            {message && (
+              <div className={`p-3 rounded-lg text-sm ${
+                message.includes('failed') ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+              }`}>
+                {message}
+              </div>
+            )}
+
+            <p className="text-center text-sm text-gray-600 mt-4">
+              Don't have an account?{' '}
+              <Link to="/signup" className="text-blue-600 hover:underline font-medium">
+                Create account
+              </Link>
+            </p>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

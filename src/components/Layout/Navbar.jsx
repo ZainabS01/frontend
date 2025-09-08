@@ -1,7 +1,7 @@
 import { FiMenu, FiX, FiHome, FiCheckSquare, FiCalendar, FiUser, FiLogOut, FiBookOpen } from 'react-icons/fi';
 import { Link, useNavigate } from 'react-router-dom';
 import { auth } from '../../firebase';
-
+import logo from '../../assets/logo.jpg'
 const Navbar = ({ mobileMenuOpen, setMobileMenuOpen, activeTab, setActiveTab, profile }) => {
   const navigate = useNavigate();
 
@@ -42,6 +42,7 @@ const Navbar = ({ mobileMenuOpen, setMobileMenuOpen, activeTab, setActiveTab, pr
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="flex items-center justify-center h-16 px-4 border-b">
+            <img src={logo} className='w-[50px] h-[50px] rounded-full' alt="" />
             <h1 className="text-xl font-bold text-blue-600">Student Portal</h1>
           </div>
 

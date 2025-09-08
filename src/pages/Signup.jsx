@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { signupWithRole } from '../firebaseAuth';
+import logo from '../assets/logo.jpg';
 
 export default function Signup() {
   const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '', semester: '', phone: '' });
@@ -56,144 +57,148 @@ export default function Signup() {
     }
   };
 
-  const messageClass = message.type === 'error' 
-    ? 'text-red-600 bg-red-100 border-l-4 border-red-500 p-4 mb-4' 
-    : 'text-green-600 bg-green-100 border-l-4 border-green-500 p-4 mb-4';
-
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-black via-gray-900 to-brand-blue px-4">
-      <form onSubmit={handleSubmit} className="bg-white/95 backdrop-blur p-6 md:p-8 rounded-xl shadow-card w-full max-w-lg">
-        <h2 className="text-2xl font-extrabold mb-6 text-center text-brand-black tracking-tight">Create your account</h2>
-        
-        {message.text && (
-          <div className={messageClass} role="alert">
-            <p>{message.text}</p>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-blue-100 p-4">
+      <div className="w-full max-w-md">
+        {/* Logo and Title */}
+        <div className="text-center mb-8">
+          <div className="flex justify-center mb-4">
+            <img 
+              src={logo} 
+              alt="GGCP Logo" 
+              className="h-20 w-20 rounded-full border-4 border-blue-100 shadow-md"
+            />
           </div>
-        )}
-        
-        <div className="mb-4">
-          <label htmlFor="name" className="block text-gray-700 text-sm font-bold mb-2">
-            Full Name
-          </label>
-          <input 
-            id="name"
-            name="name" 
-            type="text" 
-            placeholder="Enter your full name" 
-            value={form.name} 
-            onChange={handleChange} 
-            required 
-            className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-brand-blue/60"
-          />
-        </div>
-
-        <div className="mb-4">
-          <label htmlFor="email" className="block text-gray-700 text-sm font-bold mb-2">
-            Email Address
-          </label>
-          <input 
-            id="email"
-            name="email" 
-            type="email" 
-            placeholder="Enter your email" 
-            value={form.email} 
-            onChange={handleChange} 
-            required 
-            className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-brand-blue/60"
-          />
-        </div>
-
-        <div className="mb-4">
-          <label htmlFor="phone" className="block text-gray-700 text-sm font-bold mb-2">
-            Phone (03XXXXXXXXX)
-          </label>
-          <input 
-          minLength={11}
-          maxLength={11}
-            id="phone"
-            name="phone"
-            type="tel"
-            inputMode="numeric"
-            placeholder="e.g., 03xxxxxxxxx"
-            value={form.phone}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-brand-blue/60"
-          />
-          <p className="mt-1 text-xs text-gray-500">Must start with 03 and be 11 digits.</p>
-        </div>
-
-        <div className="mb-4">
-          <label htmlFor="semester" className="block text-gray-700 text-sm font-bold mb-2">
-            Semester (1–8)
-          </label>
-          <input
-            id="semester"
-            name="semester"
-            type="number"
-            min="1"
-            max="8"
-            placeholder="Enter semester between 1 and 8"
-            value={form.semester}
-            onChange={handleChange}
-            required
-            className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-brand-blue/60"
-          />
-        </div>
-
-        <div className="mb-6">
-          <label htmlFor="password" className="block text-gray-700 text-sm font-bold mb-2">
-            Password
-          </label>
-          <input 
-            id="password"
-            name="password" 
-            type="password" 
-            placeholder="Enter a strong password" 
-            value={form.password} 
-            onChange={handleChange} 
-            required 
-            minLength="6"
-            pattern="^(?=.*[!@#$%^&*()]).{6,}$"
-            className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-brand-blue/60"
-          />
-          <p className="mt-1 text-xs text-gray-500">Must be 6+ chars and include at least one of ! @ # $ % ^ & * ( )</p>
-        </div>
-
-        <div className="mb-6">
-          <label htmlFor="confirmPassword" className="block text-gray-700 text-sm font-bold mb-2">
-            Confirm Password
-          </label>
-          <input
-            id="confirmPassword"
-            name="confirmPassword"
-            type="password"
-            placeholder="Re-enter password"
-            value={form.confirmPassword}
-            onChange={handleChange}
-            required
-            className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-brand-blue/60"
-          />
+          <h1 className="text-3xl font-bold text-gray-800 mb-1">GGCP CS Department</h1>
+          <p className="text-gray-600">Student Portal</p>
         </div>
         
-        <button 
-          type="submit" 
-          disabled={isLoading}
-          className={`w-full py-2.5 px-4 rounded-md text-white font-semibold transition-colors ${
-            isLoading 
-              ? 'bg-blue-400 cursor-not-allowed' 
-              : 'bg-brand-blue hover:bg-blue-700'
-          }`}
-        >
-          {isLoading ? 'Signing up...' : 'Sign Up'}
-        </button>
-        
-        <p className="mt-4 text-center text-sm text-gray-600">
-          Already have an account?{' '}
-          <Link to="/login" className="text-brand-blue hover:underline font-medium">
-            Login here
-          </Link>
-        </p>
-      </form>
+        {/* Signup Form */}
+        <form onSubmit={handleSubmit} autoComplete="on" className="bg-white rounded-xl shadow-lg p-6 md:p-8">
+          <div className="space-y-4">
+            {message.text && (
+              <div className={`p-3 rounded-lg text-sm ${
+                message.type === 'error' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+              }`}>
+                {message.text}
+              </div>
+            )}
+            
+            <div>
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+              <input 
+                name="name" 
+                id="name" 
+                type="text" 
+                required 
+                value={form.name}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Enter your full name"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input 
+                name="email" 
+                id="email" 
+                type="email" 
+                required 
+                value={form.email}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Enter your email"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">Phone (03XXXXXXXXX)</label>
+              <input 
+                name="phone" 
+                id="phone" 
+                type="tel" 
+                required 
+                value={form.phone}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="03XXXXXXXXX"
+                minLength={11}
+                maxLength={11}
+              />
+              <p className="mt-1 text-xs text-gray-500">Must start with 03 and be 11 digits</p>
+            </div>
+
+            <div>
+              <label htmlFor="semester" className="block text-sm font-medium text-gray-700 mb-1">Semester</label>
+              <select 
+                name="semester" 
+                id="semester" 
+                required 
+                value={form.semester}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Select semester</option>
+                <option value="1">1st Semester</option>
+                <option value="2">2nd Semester</option>
+                <option value="3">3rd Semester</option>
+                <option value="4">4th Semester</option>
+                <option value="5">5th Semester</option>
+                <option value="6">6th Semester</option>
+                <option value="7">7th Semester</option>
+                <option value="8">8th Semester</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <input 
+                name="password" 
+                id="password" 
+                type="password" 
+                required 
+                value={form.password}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Create a password"
+                minLength={6}
+                pattern="^(?=.*[!@#$%^&*()]).{6,}$"
+              />
+              <p className="mt-1 text-xs text-gray-500">Must be 6+ characters and include at least one special character: ! @ # $ % ^ & * ( )</p>
+            </div>
+
+            <div>
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+              <input 
+                name="confirmPassword" 
+                id="confirmPassword" 
+                type="password" 
+                required 
+                value={form.confirmPassword}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Confirm your password"
+              />
+            </div>
+
+            <button 
+              type="submit" 
+              disabled={isLoading}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              {isLoading ? 'Creating Account...' : 'Create Account'}
+            </button>
+
+            <p className="text-center text-sm text-gray-600 mt-4">
+              Already have an account?{' '}
+              <Link to="/login" className="text-blue-600 hover:underline font-medium">
+                Sign in
+              </Link>
+            </p>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
